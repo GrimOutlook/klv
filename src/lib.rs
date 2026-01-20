@@ -19,7 +19,7 @@ use bitvec::view::BitView;
 /// # Panics
 ///
 /// - The value parsed from the BER-OID form won't fit in a u128.
-pub fn read_tag_number<T>(buf: &mut T) -> Result<u128, KlvParsingError>
+pub fn read_tag_number<T>(buf: &mut T) -> Result<u128, io::Error>
 where
     T: Read + Seek,
 {
@@ -36,7 +36,7 @@ where
 /// # Panics
 ///
 /// - The value parsed from the BER-OID form won't fit in a u128.
-pub fn read_ber_oid<T>(buf: &mut T) -> Result<u128, KlvParsingError>
+pub fn read_ber_oid<T>(buf: &mut T) -> Result<u128, io::Error>
 where
     T: Read + Seek,
 {
@@ -94,7 +94,7 @@ where
 ///
 /// - The value parsed from the BER long form won't fit in a u128.
 /// - The first bit is set but all other bits in the first byte are unset.
-pub fn read_ber<T>(buf: &mut T) -> Result<u128, KlvParsingError>
+pub fn read_ber<T>(buf: &mut T) -> Result<u128, io::Error>
 where
     T: Read + Seek,
 {
@@ -131,7 +131,7 @@ where
 /// # Panics
 ///
 /// - The value parsed from the BER long form won't fit in a u128.
-pub fn read_ber_long_form<T>(buf: &mut T, num_bytes_to_read: u8) -> Result<u128, KlvParsingError>
+pub fn read_ber_long_form<T>(buf: &mut T, num_bytes_to_read: u8) -> Result<u128, io::Error>
 where
     T: Read + Seek,
 {
@@ -151,17 +151,11 @@ where
     Ok(val)
 }
 
-#[derive(Debug, thiserror::Error)]
-pub enum KlvParsingError {
-    #[error(transparent)]
-    IoError(#[from] io::Error),
-}
-
 #[cfg(test)]
 mod tests {
     use std::io;
 
-    use crate::{KlvParsingError, read_ber, read_ber_oid};
+    use crate::{read_ber, read_ber_oid};
     use test_case::test_case;
 
     #[test_case(&[0x00], 0; "Zero")]
@@ -177,20 +171,12 @@ mod tests {
         );
     }
 
-    #[test_case( &[], KlvParsingError::IoError( io::Error::from(io::ErrorKind::UnexpectedEof)); "BER-OID buffer has no bytes")]
-    #[test_case( &[0x81], KlvParsingError::IoError( io::Error::from(io::ErrorKind::UnexpectedEof)); "BER-OID ends with MSB set")]
-    fn read_ber_oid_err(input: &[u8], expected: KlvParsingError) {
+    #[test_case( &[], io::Error::from(io::ErrorKind::UnexpectedEof); "BER-OID buffer has no bytes")]
+    #[test_case( &[0x81], io::Error::from(io::ErrorKind::UnexpectedEof); "BER-OID ends with MSB set")]
+    fn read_ber_oid_err(input: &[u8], expected: io::Error) {
         let err = read_ber_oid(&mut std::io::Cursor::new(input))
             .expect_err("Testcase should fail here but does not");
-        match err {
-            KlvParsingError::IoError(inner) => {
-                let KlvParsingError::IoError(expected_inner) = expected else {
-                    panic!("Error's don't share the same type")
-                };
-                assert_eq!(inner.kind(), expected_inner.kind())
-            }
-            _ => assert_eq!(err.to_string(), expected.to_string()),
-        }
+        assert_eq!(err.kind(), expected.kind())
     }
 
     #[should_panic]
@@ -211,20 +197,12 @@ mod tests {
         );
     }
 
-    #[test_case( &[], KlvParsingError::IoError( io::Error::from(io::ErrorKind::UnexpectedEof)); "BER buffer has no bytes")]
-    #[test_case( &[0x81], KlvParsingError::IoError( io::Error::from(io::ErrorKind::UnexpectedEof)); "BER long-form ends after first byte")]
-    fn read_ber_err(input: &[u8], expected: KlvParsingError) {
+    #[test_case( &[], io::Error::from(io::ErrorKind::UnexpectedEof); "BER buffer has no bytes")]
+    #[test_case( &[0x81], io::Error::from(io::ErrorKind::UnexpectedEof); "BER long-form ends after first byte")]
+    fn read_ber_err(input: &[u8], expected: io::Error) {
         let err = read_ber(&mut std::io::Cursor::new(input))
             .expect_err("Testcase should fail here but does not");
-        match err {
-            KlvParsingError::IoError(inner) => {
-                let KlvParsingError::IoError(expected_inner) = expected else {
-                    panic!("Error's don't share the same type")
-                };
-                assert_eq!(inner.kind(), expected_inner.kind())
-            }
-            _ => assert_eq!(err.to_string(), expected.to_string()),
-        }
+        assert_eq!(err.kind(), expected.kind())
     }
 
     #[should_panic]
