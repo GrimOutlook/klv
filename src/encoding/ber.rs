@@ -6,6 +6,7 @@ use byteorder::ReadBytesExt;
 use std::io;
 use std::io::Read;
 use std::io::Seek;
+
 /// Read in a BER value from the buffer.
 ///
 /// Handles both BER short-form and BER long-form depending on the first bit of
@@ -18,7 +19,7 @@ use std::io::Seek;
 ///
 /// # Panics
 ///
-/// - The value parsed from the BER long form won't fit in a u128.
+/// - The value parsed from the BER is long-form and won't fit in a u128.
 /// - The first bit is set but all other bits in the first byte are unset.
 pub fn read_ber<T>(buf: &mut T) -> Result<u128, io::Error>
 where
