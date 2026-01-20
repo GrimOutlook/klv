@@ -12,6 +12,11 @@ use std::io::Seek;
 /// Handles both BER short-form and BER long-form depending on the first bit of
 /// the MSB.
 ///
+/// # Returns
+///
+/// - Ok(u128) - When a valid u128 BER value can be read from the given buffer.
+/// - Err(std::io::Error) - When a valid u128 BER value cannot be read from the given buffer.
+///
 /// # Side Effects
 ///
 /// Moves the current position in the buffer to the byte after the last BER
@@ -49,6 +54,11 @@ where
 ///
 /// The first byte has already been read from the BER buffer in order to parse
 /// the number of bytes.
+///
+/// # Returns
+///
+/// - Ok(u128) - When a valid u128 BER long-form value can be read from the given buffer.
+/// - Err(std::io::Error) - When a valid u128 BER long-form value cannot be read from the given buffer.
 ///
 /// # Side Effects
 ///

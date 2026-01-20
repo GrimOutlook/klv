@@ -11,6 +11,11 @@ use crate::encoding::ber_oid::read_ber_oid;
 /// Tag numbers are always stored in BER-OID format according to the `ST 0107.5
 /// KLV Metadata in Motion Imagery` document section `6.3.1`.
 ///
+/// # Returns
+///
+/// - Ok(u128) - When a valid u128 BER-OID value can be read from the given buffer.
+/// - Err(std::io::Error) - When a valid u128 BER-OID value cannot be read from the given buffer.
+///
 /// # Side Effects
 ///
 /// Moves the current position in the buffer to the byte after the last BER-OID
@@ -30,6 +35,11 @@ where
 ///
 /// Value lengthjs are always stored in BER format according to the `ST 0107.5
 /// KLV Metadata in Motion Imagery` document section `6.3.2`.
+///
+/// # Returns
+///
+/// - Ok(u128) - When a valid u128 BER value can be read from the given buffer.
+/// - Err(std::io::Error) - When a valid u128 BER value cannot be read from the given buffer.
 ///
 /// # Side Effects
 ///
