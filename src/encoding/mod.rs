@@ -1,5 +1,8 @@
+use std::io;
+
 pub mod ber;
 pub mod ber_oid;
+pub mod integer;
 
 pub trait EnumerationValue {}
 
@@ -25,4 +28,12 @@ pub enum SimpleDataType {
 
     Integer,
     UnsignedInteger,
+}
+
+#[derive(Debug, strum::EnumTryAs, thiserror::Error)]
+pub enum Error {
+    #[error("Failed to decode {0}")]
+    DecodingError(String),
+    #[error(transparent)]
+    Other(#[from] io::Error),
 }

@@ -1,5 +1,4 @@
 pub mod encoding;
-pub mod tag;
 
 use std::io::Read;
 use std::io::{self, Seek};
