@@ -1,4 +1,6 @@
 pub mod encoding;
+pub mod format;
+pub mod local_set;
 
 use std::io::Read;
 use std::io::{self, Seek};
