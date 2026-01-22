@@ -6,6 +6,7 @@ edition = "2024"
 [dependencies]
 bitvec = "1.0.1"
 byteorder = "1.5.0"
+getset = "0.1.6"
 itertools = "0.14.0"
 ringbuffer = "0.16.0"
 strum = { version = "0.27.2", features = ["derive"] }

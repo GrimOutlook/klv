@@ -1,7 +1,9 @@
 use byteorder::ReadBytesExt;
 use std::{
+    cell::RefCell,
     io::{Read, Seek},
     ops::Deref,
+    rc::Rc,
 };
 
 use ringbuffer::{ConstGenericRingBuffer, RingBuffer};
@@ -9,7 +11,7 @@ use ringbuffer::{ConstGenericRingBuffer, RingBuffer};
 use crate::local_set::LocalSet;
 
 /// Length of a Universal Key is always 16 bytes.
-const UNIVERSAL_KEY_LENGTH: usize = 16;
+pub const UNIVERSAL_KEY_LENGTH: usize = 16;
 
 #[derive(Clone, Copy, Debug)]
 pub struct UniversalKey([u8; UNIVERSAL_KEY_LENGTH]);
@@ -28,7 +30,7 @@ impl Deref for UniversalKey {
 
 /// Set of data that can be found by searching for the Universal Key in the
 /// file.
-pub struct UniversalSet<'a, 'b, T>
+pub struct UniversalSet<'a, T>
 where
     T: Read + Seek,
 {
@@ -36,39 +38,44 @@ where
     key: &'a UniversalKey,
 
     /// Locations in the file for each tag that can be parsed.
-    data: LocalSet<'b, T>,
+    data: LocalSet<T>,
 }
 
-impl<'a, 'b, T> UniversalSet<'a, 'b, T>
+impl<'a, T> UniversalSet<'a, T>
 where
     T: Read + Seek,
 {
-    pub fn new(key: &'a UniversalKey) -> Self {
+    pub fn new(key: &'a UniversalKey, starting_location: u64) -> Self {
         Self {
             key,
             data: LocalSet::new(),
         }
     }
 
+    pub fn find_all(key: &'a UniversalKey, buf: Rc<RefCell<T>>) -> Vec<UniversalSet<'a, T>> {
+        let locations = Self::start_locations(key, &mut *buf.borrow_mut());
+        locations.iter().map(|start| UniversalSet::new(key))
+    }
+
     /// Return the offsets to the first byte of the Universal Key everywhere the
     /// Universal Key was found in the buffer.
-    fn locations(&self, file: &mut T) -> Vec<u64> {
+    pub fn start_locations(key: &'a UniversalKey, buf: &mut T) -> Vec<u64> {
         let mut locations = Vec::new();
 
         // The initial contents of the search buffer should be the start of the
         // file.
         let mut buffer_contents = [0; UNIVERSAL_KEY_LENGTH];
-        if file.read_exact(&mut buffer_contents).is_ok() {
+        if buf.read_exact(&mut buffer_contents).is_ok() {
             let mut search_buffer =
                 ConstGenericRingBuffer::<u8, UNIVERSAL_KEY_LENGTH>::from(buffer_contents);
 
             loop {
-                if itertools::equal(&search_buffer, &self.key.0) {
+                if itertools::equal(&search_buffer, &key.0) {
                     // Matches will only happen after the last byte of the
                     // Universal Key has been read so we always need to subtract
                     // the length of the key from the current position to get
                     // the starting position.
-                    let current_pos = file.stream_position().unwrap();
+                    let current_pos = buf.stream_position().unwrap();
                     let start_pos = match current_pos.checked_sub(UNIVERSAL_KEY_LENGTH as u64) {
                         Some(pos) => pos,
                         None => panic!(
@@ -78,7 +85,7 @@ where
                     locations.push(start_pos)
                 }
 
-                match file.read_u8() {
+                match buf.read_u8() {
                     Ok(val) => {
                         search_buffer.enqueue(val);
                     }
@@ -106,9 +113,8 @@ mod tests {
 
     #[test_case(&TEST_UNIVERSAL_KEY, &[0]; "One at beginning")]
     #[test_case(&chain!([0x06], TEST_UNIVERSAL_KEY).collect_vec(), &[1]; "One at offset")]
-    fn locations(buf: &[u8], expected: &[u64]) {
+    fn start_locations(buf: &[u8], expected: &[u64]) {
         let ukey = UniversalKey::new(TEST_UNIVERSAL_KEY);
-        let uset = UniversalSet::<Cursor<&[u8]>>::new(&ukey);
-        assert_eq!(uset.locations(&mut Cursor::new(buf)), *expected)
+        assert_eq!(start_locations(&ukey, &mut Cursor::new(buf)), *expected)
     }
 }
