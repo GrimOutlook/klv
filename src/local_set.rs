@@ -27,7 +27,7 @@ impl<T> LocalSet<T>
 where
     T: Read + Seek,
 {
-    pub fn new(universal_key_pos: u64, buf: Rc<RefCell<T>>) -> Result<Self, encoding::Error> {
+    pub fn read(universal_key_pos: u64, buf: Rc<RefCell<T>>) -> Result<Self, encoding::Error> {
         // Stores all of the tags
         let mut bmap = BTreeMap::new();
 

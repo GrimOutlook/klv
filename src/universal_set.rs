@@ -8,7 +8,7 @@ use std::{
 
 use ringbuffer::{ConstGenericRingBuffer, RingBuffer};
 
-use crate::local_set::LocalSet;
+use crate::{encoding, klv::Klv, local_set::LocalSet};
 
 /// Length of a Universal Key is always 16 bytes.
 pub const UNIVERSAL_KEY_LENGTH: usize = 16;
@@ -45,21 +45,34 @@ impl<'a, T> UniversalSet<'a, T>
 where
     T: Read + Seek,
 {
-    pub fn new(key: &'a UniversalKey, starting_location: u64) -> Self {
-        Self {
+    pub fn new(
+        key: &'a UniversalKey,
+        buf: Rc<RefCell<T>>,
+        starting_location: u64,
+    ) -> Result<Self, encoding::Error> {
+        Ok(Self {
             key,
-            data: LocalSet::new(),
-        }
+            data: LocalSet::read(starting_location, buf)?,
+        })
     }
 
-    pub fn find_all(key: &'a UniversalKey, buf: Rc<RefCell<T>>) -> Vec<UniversalSet<'a, T>> {
-        let locations = Self::start_locations(key, &mut *buf.borrow_mut());
-        locations.iter().map(|start| UniversalSet::new(key))
+    pub fn find_all(
+        key: &'a UniversalKey,
+        buf: Rc<RefCell<T>>,
+    ) -> Result<Vec<UniversalSet<'a, T>>, encoding::Error> {
+        let locations = Self::start_locations(key, &mut *buf.borrow_mut())?;
+        locations
+            .iter()
+            .map(|start| UniversalSet::new(key, buf.clone(), *start))
+            .collect::<Result<Vec<UniversalSet<'a, T>>, encoding::Error>>()
     }
 
     /// Return the offsets to the first byte of the Universal Key everywhere the
     /// Universal Key was found in the buffer.
-    pub fn start_locations(key: &'a UniversalKey, buf: &mut T) -> Vec<u64> {
+    pub fn start_locations(
+        key: &'a UniversalKey,
+        buf: &mut T,
+    ) -> Result<Vec<u64>, encoding::Error> {
         let mut locations = Vec::new();
 
         // The initial contents of the search buffer should be the start of the
@@ -82,7 +95,12 @@ where
                             "Starting position of Key with length [{UNIVERSAL_KEY_LENGTH}] ending at index [{current_pos}] results in a negative offset in the buffer"
                         ),
                     };
-                    locations.push(start_pos)
+                    locations.push(start_pos);
+
+                    // Get how far to jump at the very least to get to the next
+                    // KLV value.
+                    let value_length = Klv::read_length(buf)?;
+                    buf.seek_relative(value_length.try_into().unwrap()).unwrap();
                 }
 
                 match buf.read_u8() {
@@ -94,7 +112,7 @@ where
             }
         };
 
-        locations
+        Ok(locations)
     }
 }
 
@@ -111,10 +129,14 @@ mod tests {
         0x00,
     ];
 
-    #[test_case(&TEST_UNIVERSAL_KEY, &[0]; "One at beginning")]
-    #[test_case(&chain!([0x06], TEST_UNIVERSAL_KEY).collect_vec(), &[1]; "One at offset")]
-    fn start_locations(buf: &[u8], expected: &[u64]) {
+    #[test_case(&chain!(TEST_UNIVERSAL_KEY, [0x01, 0x00]).collect_vec(), &[0]; "One at beginning")]
+    #[test_case(&chain!([0x06], TEST_UNIVERSAL_KEY, [0x01, 0x00]).collect_vec(), &[1]; "One at offset")]
+    #[test_case(&chain!([0x06], TEST_UNIVERSAL_KEY, [0x01, 0x06], TEST_UNIVERSAL_KEY, [0x01, 0x00]).collect_vec(), &[1, 19]; "Two at offset")]
+    fn test_start_locations(buf: &[u8], expected: &[u64]) {
         let ukey = UniversalKey::new(TEST_UNIVERSAL_KEY);
-        assert_eq!(start_locations(&ukey, &mut Cursor::new(buf)), *expected)
+        assert_eq!(
+            UniversalSet::start_locations(&ukey, &mut Cursor::new(buf)).unwrap(),
+            *expected
+        )
     }
 }
