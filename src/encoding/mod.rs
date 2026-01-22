@@ -3,6 +3,7 @@ use std::io;
 pub mod ber;
 pub mod ber_oid;
 pub mod integer;
+pub mod unsigned_integer;
 
 pub trait EnumerationValue {}
 
