@@ -60,6 +60,7 @@ dependencies = [
  "bitvec",
  "byteorder",
  "itertools",
+ "ringbuffer",
  "strum",
  "test-case",
  "thiserror",
@@ -88,6 +89,12 @@ name = "radium"
 version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dc33ff2d4973d518d823d61aa239014831e521c75da58e3df4840d3f47749d09"
+
+[[package]]
+name = "ringbuffer"
+version = "0.16.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "57b0b88a509053cbfd535726dcaaceee631313cef981266119527a1d110f6d2b"
 
 [[package]]
 name = "strum"
