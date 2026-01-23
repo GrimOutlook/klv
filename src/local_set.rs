@@ -2,6 +2,7 @@ use std::{
     cell::RefCell,
     collections::BTreeMap,
     io::{Read, Seek, SeekFrom},
+    ops::Deref,
     rc::Rc,
 };
 
@@ -15,12 +16,25 @@ use crate::{
 type TagNumber = u128;
 
 /// Set of data that must be found in reference to Universal Key
+#[derive(Debug, getset::Getters)]
+#[getset(get = "pub")]
 pub struct LocalSet<T>
 where
     T: Read + Seek,
 {
     /// Locations in the file for each tag that can be parsed.
     data: BTreeMap<TagNumber, Klv<T>>,
+}
+
+impl<T> Deref for LocalSet<T>
+where
+    T: Read + Seek,
+{
+    type Target = BTreeMap<TagNumber, Klv<T>>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.data
+    }
 }
 
 impl<T> LocalSet<T>
@@ -38,7 +52,9 @@ where
         let mut buf_ref = buf.borrow_mut();
 
         // Move the file pointer to the start of the length
-        buf_ref.seek(SeekFrom::Start(length_pos));
+        buf_ref
+            .seek(SeekFrom::Start(length_pos))
+            .expect("Failed to seek to the start of local set value portion");
 
         // Length of the value portion of this KLV triplet.
         let value_length: u64 = read_ber(&mut *buf_ref)?
@@ -53,7 +69,7 @@ where
 
         while buf.borrow_mut().stream_position().unwrap() != final_value_position + 1 {
             let klv = Klv::new(buf.clone())?;
-            bmap.insert(*klv.tag(), klv);
+            bmap.insert(klv.tag(), klv);
         }
 
         Ok(Self { data: bmap })

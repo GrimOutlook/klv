@@ -2,14 +2,16 @@ use std::cell::RefCell;
 use std::io;
 use std::io::Read;
 use std::io::Seek;
+use std::io::SeekFrom;
 use std::rc::Rc;
 
 use crate::encoding;
 use crate::encoding::ber::read_ber;
 use crate::encoding::ber_oid::read_ber_oid;
 
-#[derive(Debug, getset::Getters)]
-#[getset(get = "pub")]
+pub type RawValueData = Vec<u8>;
+
+#[derive(Debug, getset::CopyGetters)]
 pub struct Klv<T>
 where
     T: Read + Seek,
@@ -18,6 +20,7 @@ where
     buf: Rc<RefCell<T>>,
 
     /// Number that identifies this KLV triplet in a LocalSet.
+    #[getset(get_copy = "pub")]
     tag: u128,
 
     /// Number of bytes that make up the value for this KLV triplet.
@@ -28,19 +31,20 @@ where
     /// Metadata in Motion Imagery_ that stipulates that lengths use BER limit
     /// this amount we use the largest uint container that the Seek trait can
     /// handle which is a `u64`.
+    #[getset(get_copy = "pub")]
     length: u64,
 
     /// Starting offset in the file for the first byte that makes up the value
     /// for this KLV triplet.
-    starting_offset: u64,
+    value_offset: u64,
 }
 
 impl<T> Klv<T>
 where
     T: Read + Seek,
 {
-    /// Reads in a new KLV triplet from the current buffer, using the current
-    /// position as the start of the Tag data.
+    /// Reads in a new KLV triplet from the current buffer position, using the
+    /// current position as the start of the Tag data.
     ///
     /// # Returns
     ///
@@ -60,7 +64,7 @@ where
         let length = Self::read_length(&mut *buf_ref)?;
         let starting_offset = buf_ref.stream_position().unwrap();
         // Move the cursor position to the next byte after the value
-        buf_ref.seek_relative(length.try_into().unwrap());
+        buf_ref.seek_relative(length.try_into().unwrap()).unwrap();
 
         drop(buf_ref);
 
@@ -68,11 +72,11 @@ where
             buf,
             tag,
             length,
-            starting_offset,
+            value_offset: starting_offset,
         })
     }
 
-    /// Reads the tag number from the buffer
+    /// Reads the tag number from the current buffer location
     ///
     /// Tag numbers are always stored in BER-OID format according to the `ST
     /// 0107.5 KLV Metadata in Motion Imagery` document section `6.3.1`.
@@ -96,7 +100,7 @@ where
         read_ber_oid(buf)
     }
 
-    /// Reads the length of the KLV value from the buffer
+    /// Reads the length of the KLV value from the current buffer location
     ///
     /// Value lengthjs are always stored in BER format according to the `ST
     /// 0107.5 KLV Metadata in Motion Imagery` document section `6.3.2`.
@@ -122,5 +126,19 @@ where
                 "Seek trait only supports 64 bit integers but Length requiring 128 bit integer was found",
             )
         })
+    }
+
+    /// Returns a copy of the bytes making up the value.
+    pub fn read_value(&self) -> Result<Vec<u8>, io::Error> {
+        let mut buf = self.buf.borrow_mut();
+        let current_position = buf.stream_position().unwrap();
+        buf.seek(SeekFrom::Start(self.value_offset)).unwrap();
+
+        let mut temp_buf = vec![0; self.length as usize];
+        buf.read_exact(&mut temp_buf)?;
+
+        buf.seek(SeekFrom::Start(current_position)).unwrap();
+
+        Ok(temp_buf)
     }
 }
